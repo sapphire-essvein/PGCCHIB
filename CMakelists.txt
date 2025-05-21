@@ -56,6 +56,8 @@ set(EXERCISES
     Modulo2/Ex1Parte1M2
     Modulo2/Ex1Parte2M2
     Modulo2/AtivVivencial
+    Modulo2/MeuEx1e2
+    Modulo2/MeuEx3
     Modulo3/M3JogoCores
 )
 
