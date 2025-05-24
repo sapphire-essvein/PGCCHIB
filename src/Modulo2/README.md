@@ -1,0 +1,1 @@
+O da código AtivVivencial.cpp foi feito com alterações do código Ex1Parte2M2 ja pronto do repositorio do da disciplina, onde adicionei uma variavel global para salvar os vertices e alterei como os triangulos eram criados, ao inves de salvar o centro, vai salvando os vertices para depois criar o triangulo no loop. 
