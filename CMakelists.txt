@@ -49,7 +49,8 @@ set(EXERCISES
     ExemplosMoodle/M2_material/exemplo_02
     ExemplosMoodle/M3_material/exemplo_03
     ExemplosMoodle/M4_material/exemplo_04
-    # ExemplosMoodle/M5_material/exemplo_05
+    #ExemplosMoodle/M5_material/exemplo_05
+    #ExemplosMoodle/M5_material/exemplo_06
     HelloTriangle
     HelloTransform
     HelloTexture
@@ -59,6 +60,8 @@ set(EXERCISES
     Modulo2/MeuEx1e2
     Modulo2/MeuEx3
     Modulo3/M3JogoCores
+    Modulo4/Desafio4
+    Modulo4/AtivVivencialM4
 )
 
 add_compile_options(-Wno-pragmas)
