@@ -90,6 +90,12 @@ struct Layer {
 };
 
 int main() {
+    const int startFrame = 5;  // 6º sprite (index 5)
+    const int endFrame = 11;   // 12º sprite (index 11)
+    int currentFrame = startFrame;
+    float frameDuration = 0.1f; // tempo em segundos para cada frame
+    float frameTimer = 0.0f;
+
     if (!glfwInit()) {
         std::cerr << "Falha ao inicializar GLFW\n";
         return -1;
@@ -206,9 +212,14 @@ int main() {
         return -1;
     }
     Quad charQuad = {{WIDTH / 2.f, HEIGHT / 2.f}, {100.f, 100.f}};
-    int cols = 15, rows = 1, col = 14, row = 0;
+    /*int cols = 15, rows = 1, col = 14, row = 0;
     glm::vec2 uv_min = { col / float(cols), row / float(rows) };
     glm::vec2 uv_max = { (col + 1) / float(cols), (row + 1) / float(rows) };
+    Sprite character(vao, texChar, shader, charQuad, uv_min, uv_max);*/
+    int cols = 15;
+    int rows = 1;
+    glm::vec2 uv_min = {startFrame / float(cols), 0.0f};
+    glm::vec2 uv_max = {(startFrame + 1) / float(cols), 1.0f};
     Sprite character(vao, texChar, shader, charQuad, uv_min, uv_max);
 
     glm::vec2 playerPos = {WIDTH / 2.f, HEIGHT / 2.f};
@@ -217,6 +228,23 @@ int main() {
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        static double lastTime = glfwGetTime();
+        double currentTime = glfwGetTime();
+        float deltaTime = float(currentTime - lastTime);
+        lastTime = currentTime;
+
+        frameTimer += deltaTime;
+        if (frameTimer >= frameDuration) {
+            frameTimer = 0.0f;
+            currentFrame++;
+            if (currentFrame > endFrame) currentFrame = startFrame;
+
+            character.uv_min.x = currentFrame / float(cols);
+            character.uv_max.x = (currentFrame + 1) / float(cols);
+            character.uv_min.y = 0.0f;
+            character.uv_max.y = 1.0f;
+        }
 
         glm::vec2 movement(0.f, 0.f);
         const float speed = 1.5f;
