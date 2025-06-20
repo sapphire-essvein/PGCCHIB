@@ -62,6 +62,7 @@ set(EXERCISES
     Modulo3/M3JogoCores
     Modulo4/Desafio4
     Modulo4/AtivVivencialM4
+    Modulo5/Desafio5
 )
 
 add_compile_options(-Wno-pragmas)
