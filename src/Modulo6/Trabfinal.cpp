@@ -20,10 +20,10 @@ using namespace glm;
 
 enum class TileType
 {
-	Walkable, // pode andar
-	Deadly,	  // perigoso (lava)
-	Blocked,  // bloqueia movimento (água, muro)
-	Unknown	  // caso não especificado
+	Walkable,
+	Deadly,
+	Blocked,
+	Unknown
 };
 
 struct Sprite
@@ -50,12 +50,12 @@ struct Tile
 
 struct MapConfig
 {
-	string tilesetFile;						// [file]
-	int nTiles;								// [nTiles]
-	int tileW, tileH;						// [width]  [height]
-	int rows, cols;							// [rows]   [columns]
-	vector<int> matrix;						// [matrix]  rows*cols elementos
-	int playerInicialRow, playerInicialCol; // [rowInicialPosition] [columnInicialPosition]
+	string tilesetFile;
+	int nTiles;
+	int tileW, tileH;
+	int rows, cols;
+	vector<int> matrix;
+	int playerInicialRow, playerInicialCol;
 };
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode);
@@ -158,7 +158,7 @@ int main()
 
 	int imgWidth, imgHeight;
 
-	GLuint texID = loadTexture("../src/Modulo6/tilesetIso.png", imgWidth, imgHeight);
+	GLuint texID = loadTexture("../assets/tilesets/tilesetIso.png", imgWidth, imgHeight);
 
 	for (int i = 0; i < cfg.nTiles; ++i)
 	{
@@ -193,7 +193,7 @@ int main()
 
 	Sprite jogador;
 	jogador.dimensions = vec3(cfg.tileW, cfg.tileW, 1.0); // altura da sprite, ajustável
-	jogador.texID = loadTexture("../src/Modulo4/Karasu_tengu/Jump.png", imgWidth, imgHeight);
+	jogador.texID = loadTexture("../assets/sprites/Jump.png", imgWidth, imgHeight);
 	jogador.VAO = setupSprite(1, 15, jogador.ds, jogador.dt); // 1 linha, 15 sprites
 	jogador.nAnimations = 1;
 	jogador.nFrames = 15;
@@ -666,7 +666,7 @@ bool loadTileProps(const string &filename, vector<TileType> &tileTypes)
 				c = tolower(c);
 			continue;
 		}
-		if (sectionMap.count(currentSection)){
+		if (sectionMap.count(currentSection))
 		{
 			TileType tipo = sectionMap[currentSection];
 			istringstream iss(line);
