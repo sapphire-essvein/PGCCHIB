@@ -63,7 +63,8 @@ set(EXERCISES
     #Modulo4/Desafio4
     #Modulo4/AtivVivencialM4
     #Modulo5/Desafio5
-    Modulo5/VivencialTileMap
+    Modulo6/VivencialTileMap
+    Modulo6/Trabfinal
 )
 
 add_compile_options(-Wno-pragmas)

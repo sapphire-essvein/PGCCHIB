@@ -121,7 +121,7 @@ int main()
 	GLuint shaderID = setupShader();
 
 	int imgWidth, imgHeight;
-	GLuint texID = loadTexture("../src/Modulo5/tilesetIso.png",imgWidth,imgHeight);
+	GLuint texID = loadTexture("../src/Modulo6/tilesetIso.png",imgWidth,imgHeight);
 	
 	for (int i=0; i < 7; i++)
 	{
@@ -172,7 +172,7 @@ int main()
 				double fps = 1.0 / elapsed_s;
 
 				char tmp[256];
-				sprintf(tmp, "Ola Triangulo! -- Rossana\tFPS %.2lf", fps);
+				sprintf(tmp, "Vivencial 3\tFPS %.2lf", fps);
 				glfwSetWindowTitle(window, tmp);
 
 				title_countdown_s = 0.1;
