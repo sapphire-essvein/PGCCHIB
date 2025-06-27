@@ -1,0 +1,12 @@
+[walkable]       
+0               
+1                             
+4              
+6
+
+[deadly]       
+3               
+
+[blocked]               
+2         
+5

@@ -1,19 +1,30 @@
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <unordered_set>
 #include <iostream>
 #include <string>
-#include <assert.h>
-#include <cmath>
 
-using namespace std;
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-#include <glm/glm.hpp> 
+
+#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+using namespace std;
 using namespace glm;
 
+enum class TileType
+{
+	Walkable,
+	Deadly,
+	Blocked,
+	Unknown
+};
 
 struct Sprite
 {
@@ -25,7 +36,7 @@ struct Sprite
 	int iAnimation, iFrame;
 	int nAnimations, nFrames;
 };
-	
+
 struct Tile
 {
 	GLuint VAO;
@@ -34,19 +45,33 @@ struct Tile
 	vec3 position;
 	vec3 dimensions;
 	float ds, dt;
-};	
+	TileType type = TileType::Unknown;
+};
+
+struct MapConfig
+{
+	string tilesetFile;
+	int nTiles;
+	int tileW, tileH;
+	int rows, cols;
+	vector<int> matrix;
+	int playerInicialRow, playerInicialCol;
+};
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode);
 
+bool loadMapConfig(const string &path, MapConfig &cfg, string &err);
+bool loadTileProps(const string &filename, vector<TileType> &tileTypes);
 int setupShader();
 int setupSprite(int nAnimations, int nFrames, float &ds, float &dt);
 int setupTile(int nTiles, float &ds, float &dt);
 int loadTexture(string filePath, int &width, int &height);
-void desenharMapa(GLuint shaderID);
+void desenharMapa(GLuint shaderID, float x0, float y0);
 
-const GLuint WIDTH = 800, HEIGHT = 600;
-
-int player_i = 1, player_j = 1;
+MapConfig cfg;
+vector<Tile> tileset;
+int player_i = 0, player_j = 0;
+GLuint WIDTH = 800, HEIGHT = 600;
 
 const GLchar *vertexShaderSource = R"(
  #version 400
@@ -75,19 +100,30 @@ const GLchar *fragmentShaderSource = R"(
  }
  )";
 
-
- #define TILEMAP_WIDTH 3
- #define TILEMAP_HEIGHT 3
-int map[3][3] = {
-1, 1, 3,
-5, 1, 5,
-5, 5, 1
-};
-
-vector <Tile> tileset;
-
 int main()
 {
+	string err;
+	if (!loadMapConfig("../src/Modulo6/config/tileMap.txt", cfg, err))
+	{
+		cerr << "Erro: " << err << '\n';
+		return -1;
+	}
+
+	WIDTH = ((cfg.rows + cfg.cols) / 2) * cfg.tileW + 20;
+	HEIGHT = ((cfg.rows + cfg.cols) / 2) * cfg.tileH + 20;
+	float x0 = (cfg.rows - 1) * cfg.tileW * 0.5f;
+	float y0 = 10.0f;
+
+	player_i = cfg.playerInicialRow;
+	player_j = cfg.playerInicialCol;
+
+	vector<TileType> tileTypes(cfg.nTiles, TileType::Unknown);
+	if (!loadTileProps("../src/Modulo6/config/tileProps.txt", tileTypes))
+	{
+		cerr << "Erro ao carregar propriedades dos tiles!" << endl;
+		return -1;
+	}
+
 	glfwInit();
 
 	glfwWindowHint(GLFW_SAMPLES, 8);
@@ -121,15 +157,17 @@ int main()
 	GLuint shaderID = setupShader();
 
 	int imgWidth, imgHeight;
-	GLuint texID = loadTexture("../src/Modulo6/tilesetIso.png",imgWidth,imgHeight);
-	
-	for (int i=0; i < 7; i++)
+
+	GLuint texID = loadTexture("../assets/tilesets/tilesetIso.png", imgWidth, imgHeight);
+
+	for (int i = 0; i < cfg.nTiles; ++i)
 	{
 		Tile tile;
-		tile.dimensions = vec3(114,57,1.0);
+		tile.dimensions = vec3(cfg.tileW, cfg.tileH, 1.0);
 		tile.iTile = i;
+		tile.type = tileTypes[i];
 		tile.texID = texID;
-		tile.VAO = setupTile(7,tile.ds,tile.dt);
+		tile.VAO = setupTile(cfg.nTiles, tile.ds, tile.dt);
 		tileset.push_back(tile);
 	}
 
@@ -144,7 +182,7 @@ int main()
 
 	glUniform1i(glGetUniformLocation(shaderID, "tex_buff"), 0);
 
-	mat4 projection = ortho(0.0, 800.0, 600.0, 0.0, -1.0, 1.0);
+	mat4 projection = ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -1.0f, 1.0f);
 	glUniformMatrix4fv(glGetUniformLocation(shaderID, "projection"), 1, GL_FALSE, value_ptr(projection));
 
 	glEnable(GL_DEPTH_TEST);
@@ -153,20 +191,20 @@ int main()
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    Sprite jogador;
-    jogador.dimensions = vec3(114, 114, 1.0); // altura da sprite, ajustável
-    jogador.texID = loadTexture("../src/Modulo4/Karasu_tengu/Jump.png", imgWidth, imgHeight);
-    jogador.VAO = setupSprite(1, 15, jogador.ds, jogador.dt); // 1 linha, 15 sprites
-    jogador.nAnimations = 1;
-    jogador.nFrames = 15;
-    jogador.iAnimation = 0;
-    jogador.iFrame = 6; // começando do sprite 6 ao 12
+	Sprite jogador;
+	jogador.dimensions = vec3(cfg.tileW, cfg.tileW, 1.0); // altura da sprite, ajustável
+	jogador.texID = loadTexture("../assets/sprites/Jump.png", imgWidth, imgHeight);
+	jogador.VAO = setupSprite(1, 15, jogador.ds, jogador.dt); // 1 linha, 15 sprites
+	jogador.nAnimations = 1;
+	jogador.nFrames = 15;
+	jogador.iAnimation = 0;
+	jogador.iFrame = 6; // começando do sprite 6 ao 12
 
-    double tempo_animacao = 0;
-    int frame_atual = 6;
+	double tempo_animacao = 0;
+	int frame_atual = 6;
 
 	double lastTime = glfwGetTime();
-    double deltaT = 0.0;
+	double deltaT = 0.0;
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -196,79 +234,124 @@ int main()
 		glLineWidth(10);
 		glPointSize(20);
 
-        double currTime = glfwGetTime();
-        deltaT = currTime - lastTime;
-        lastTime = currTime;
+		double currTime = glfwGetTime();
+		deltaT = currTime - lastTime;
+		lastTime = currTime;
 
-        tempo_animacao += deltaT;
-        if (tempo_animacao > 0.1) // troca de frame a cada 0.1s
-        {
-            frame_atual++;
-            if (frame_atual > 12) frame_atual = 6; // loop do 6 ao 12
-            jogador.iFrame = frame_atual;
-            tempo_animacao = 0;
-        }
+		tempo_animacao += deltaT;
+		if (tempo_animacao > 0.1) // troca de frame a cada 0.1s
+		{
+			frame_atual++;
+			if (frame_atual > 12)
+				frame_atual = 6; // loop do 6 ao 12
+			jogador.iFrame = frame_atual;
+			tempo_animacao = 0;
+		}
 
-		desenharMapa(shaderID);
+		desenharMapa(shaderID, x0, y0);
 
-        Tile curr_tile = tileset[map[player_i][player_j]];
-        if (curr_tile.iTile == 3) {
-        std::cout << "Voce morreu! Nao pise na lava..." << std::endl;
-        glfwSetWindowShouldClose(window, GL_TRUE); // Encerra o programa
-}
+		Tile curr_tile = tileset[cfg.matrix[player_i * cfg.cols + player_j]];
 
-        float x = 400 + (player_j - player_i) * curr_tile.dimensions.x / 2.0;
-        float y = 100 + (player_j + player_i) * curr_tile.dimensions.y / 2.0;
+		float x = x0 + (player_j - player_i) * curr_tile.dimensions.x / 2.0f;
+		float y = y0 + (player_j + player_i) * curr_tile.dimensions.y / 2.0f;
 
-        mat4 model = mat4(1.0);
-        model = translate(model, vec3(x + curr_tile.dimensions.x / 2.0, y + curr_tile.dimensions.y /  2.0 - jogador.dimensions.y / 2.0, 0)); 
-        model = scale(model, jogador.dimensions);
+		mat4 model = mat4(1.0);
+		model = translate(model, vec3(x + curr_tile.dimensions.x / 2.0, y + curr_tile.dimensions.y / 2.0 - jogador.dimensions.y / 2.0, 0));
+		model = scale(model, jogador.dimensions);
 
-        glUniformMatrix4fv(glGetUniformLocation(shaderID, "model"), 1, GL_FALSE, value_ptr(model));
+		glUniformMatrix4fv(glGetUniformLocation(shaderID, "model"), 1, GL_FALSE, value_ptr(model));
 
-        vec2 offsetTex;
-        offsetTex.s = jogador.iFrame * jogador.ds;
-        offsetTex.t = 1.0 - jogador.dt;
-        glUniform2f(glGetUniformLocation(shaderID, "offsetTex"), offsetTex.s, offsetTex.t);
+		vec2 offsetTex;
+		offsetTex.s = jogador.iFrame * jogador.ds;
+		offsetTex.t = 1.0 - jogador.dt;
+		glUniform2f(glGetUniformLocation(shaderID, "offsetTex"), offsetTex.s, offsetTex.t);
 
-        glBindVertexArray(jogador.VAO);
-        glBindTexture(GL_TEXTURE_2D, jogador.texID);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
+		glBindVertexArray(jogador.VAO);
+		glBindTexture(GL_TEXTURE_2D, jogador.texID);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 		glfwSwapBuffers(window);
 	}
-		
+
 	glfwTerminate();
 	return 0;
 }
+
+inline int tileAt(int i, int j) { return cfg.matrix[i * cfg.cols + j]; }
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode)
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GL_TRUE);
-    if(action == GLFW_PRESS) {
-    int di = 0, dj = 0;
 
-    switch (key) {
-        case GLFW_KEY_Z: di = +1; dj = -1; break; // SW
-        case GLFW_KEY_X: di = +1; dj =  0; break; // S
-        case GLFW_KEY_C: di = +1; dj = +1; break; // SE
-        case GLFW_KEY_A: di =  0; dj = -1; break; // W
-        case GLFW_KEY_D: di =  0; dj = +1; break; // E
-        case GLFW_KEY_Q: di = -1; dj = -1; break; // NW
-        case GLFW_KEY_W: di = -1; dj =  0; break; // N
-        case GLFW_KEY_E: di = -1; dj = +1; break; // NE
-    }
+	if (action == GLFW_PRESS)
+	{
+		int di = 0, dj = 0;
 
-    int new_i = player_i + di;
-    int new_j = player_j + dj;
+		switch (key)
+		{
+		case GLFW_KEY_Z:
+			di = +1;
+			dj = -1;
+			break; // SW
+		case GLFW_KEY_X:
+			di = +1;
+			dj = 0;
+			break; // S
+		case GLFW_KEY_C:
+			di = +1;
+			dj = +1;
+			break; // SE
+		case GLFW_KEY_A:
+			di = 0;
+			dj = -1;
+			break; // W
+		case GLFW_KEY_D:
+			di = 0;
+			dj = +1;
+			break; // E
+		case GLFW_KEY_Q:
+			di = -1;
+			dj = -1;
+			break; // NW
+		case GLFW_KEY_W:
+			di = -1;
+			dj = 0;
+			break; // N
+		case GLFW_KEY_E:
+			di = -1;
+			dj = +1;
+			break; // NE
+		}
 
-    if(new_i >= 0 && new_i < TILEMAP_HEIGHT && new_j >= 0 && new_j < TILEMAP_WIDTH) {
-        player_i = new_i;
-        player_j = new_j;
-    }
-}
+		int new_i = player_i + di;
+		int new_j = player_j + dj;
+
+		if (new_i >= 0 && new_j >= 0 && new_i < cfg.rows && new_j < cfg.cols)
+		{
+			int tileID = tileAt(new_i, new_j);
+			TileType tileType = tileset[tileID].type;
+
+			switch (tileType)
+			{
+			case TileType::Walkable:
+				player_i = new_i;
+				player_j = new_j;
+				break;
+			case TileType::Deadly:
+				cout << "Você morreu ao pisar em tile perigoso!" << endl;
+				glfwSetWindowShouldClose(window, GL_TRUE);
+				break;
+			case TileType::Blocked:
+				cout << "Tile bloqueado! Não é possível se mover para cá." << endl;
+				break;
+			case TileType::Unknown:
+			default:
+				cout << "Tile desconhecido! Não é possível se mover para cá." << endl;
+				break;
+			}
+		}
+	}
 }
 
 int setupShader()
@@ -315,15 +398,14 @@ int setupShader()
 int setupSprite(int nAnimations, int nFrames, float &ds, float &dt)
 {
 
-	ds = 1.0 / (float) nFrames;
-	dt = 1.0 / (float) nAnimations;
+	ds = 1.0 / (float)nFrames;
+	dt = 1.0 / (float)nAnimations;
 
 	GLfloat vertices[] = {
-		-0.5,  0.5, 0.0, 0.0, 0.0,
+		-0.5, 0.5, 0.0, 0.0, 0.0,
 		-0.5, -0.5, 0.0, 0.0, dt,
-		 0.5,  0.5, 0.0, ds, 0.0,
-		 0.5, -0.5, 0.0, ds, dt
-		};
+		0.5, 0.5, 0.0, ds, 0.0,
+		0.5, -0.5, 0.0, ds, dt};
 
 	GLuint VBO, VAO;
 	glGenBuffers(1, &VBO);
@@ -349,18 +431,17 @@ int setupSprite(int nAnimations, int nFrames, float &ds, float &dt)
 
 int setupTile(int nTiles, float &ds, float &dt)
 {
-    
-	ds = 1.0 / (float) nTiles;
+
+	ds = 1.0 / (float)nTiles;
 	dt = 1.0;
-	
+
 	float th = 1.0, tw = 1.0;
 
 	GLfloat vertices[] = {
-		0.0,  th/2.0f,   0.0, 0.0,    dt/2.0f,
-		tw/2.0f, th,     0.0, ds/2.0f, dt,
-		tw/2.0f, 0.0,    0.0, ds/2.0f, 0.0,
-		tw,     th/2.0f, 0.0, ds,     dt/2.0f 
-		};
+		0.0, th / 2.0f, 0.0, 0.0, dt / 2.0f,
+		tw / 2.0f, th, 0.0, ds / 2.0f, dt,
+		tw / 2.0f, 0.0, 0.0, ds / 2.0f, 0.0,
+		tw, th / 2.0f, 0.0, ds, dt / 2.0f};
 
 	GLuint VBO, VAO;
 	glGenBuffers(1, &VBO);
@@ -425,38 +506,180 @@ int loadTexture(string filePath, int &width, int &height)
 	return texID;
 }
 
-void desenharMapa(GLuint shaderID)
+void desenharMapa(GLuint shaderID, float x0, float y0)
 {
-	float x0 = 400;
-	float y0 = 100;
-
-	for(int i=0; i<TILEMAP_HEIGHT; i++)
+	for (int i = 0; i < cfg.rows; i++)
 	{
-		for (int j=0; j < TILEMAP_WIDTH; j++)
+		for (int j = 0; j < cfg.cols; j++)
 		{
 			mat4 model = mat4(1);
-			
-            Tile curr_tile = tileset[map[i][j]];
-			if(i == player_i && j == player_j)
-            curr_tile = tileset[6];
 
-			float x = x0 + (j-i) * curr_tile.dimensions.x/2.0;
-			float y = y0 + (j+i) * curr_tile.dimensions.y/2.0;
+			Tile curr_tile = tileset[tileAt(i, j)];
+			if (i == player_i && j == player_j)
+				curr_tile = tileset[6];
 
-			model = translate(model, vec3(x,y,0.0));
-			model = scale(model,curr_tile.dimensions);
+			float x = x0 + (j - i) * curr_tile.dimensions.x / 2.0f;
+			float y = y0 + (j + i) * curr_tile.dimensions.y / 2.0f;
+
+			model = translate(model, vec3(x, y, 0.0));
+			model = scale(model, curr_tile.dimensions);
 			glUniformMatrix4fv(glGetUniformLocation(shaderID, "model"), 1, GL_FALSE, value_ptr(model));
 
-		vec2 offsetTex;
+			vec2 offsetTex;
 
-		offsetTex.s = curr_tile.iTile * curr_tile.ds;
-		offsetTex.t = 0.0;
-		glUniform2f(glGetUniformLocation(shaderID, "offsetTex"),offsetTex.s, offsetTex.t);
+			offsetTex.s = curr_tile.iTile * curr_tile.ds;
+			offsetTex.t = 0.0;
+			glUniform2f(glGetUniformLocation(shaderID, "offsetTex"), offsetTex.s, offsetTex.t);
 
-		glBindVertexArray(curr_tile.VAO);
-		glBindTexture(GL_TEXTURE_2D, curr_tile.texID);
+			glBindVertexArray(curr_tile.VAO);
+			glBindTexture(GL_TEXTURE_2D, curr_tile.texID);
 
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4); 
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		}
 	}
+}
+
+bool loadMapConfig(const string &path, MapConfig &cfg, string &err)
+{
+	ifstream in(path);
+	if (!in)
+	{
+		err = "Não foi possível abrir o arquivo de configuração: " + path;
+		return false;
+	}
+
+	string line, section;
+	unordered_set<string> seen;
+	vector<int> matrixVals;
+
+	auto need = [&](const string &s)
+	{
+		if (!seen.count(s))
+		{
+			err = "Seção [" + s + "] ausente";
+			return false;
+		}
+		return true;
+	};
+
+	while (getline(in, line))
+	{
+		// remove espaços laterais
+		line.erase(0, line.find_first_not_of(" \t\r\n"));
+		line.erase(line.find_last_not_of(" \t\r\n") + 1);
+
+		if (line.empty())
+			continue;
+		if (line.front() == '[' && line.back() == ']')
+		{ // nova seção
+			section = line.substr(1, line.size() - 2);
+			seen.insert(section);
+			continue;
+		}
+
+		istringstream iss(line);
+		if (section == "file")
+			getline(iss, cfg.tilesetFile);
+		else if (section == "nTiles")
+			iss >> cfg.nTiles;
+		else if (section == "width")
+			iss >> cfg.tileW;
+		else if (section == "height")
+			iss >> cfg.tileH;
+		else if (section == "rows")
+			iss >> cfg.rows;
+		else if (section == "columns")
+			iss >> cfg.cols;
+		else if (section == "rowInicialPosition")
+			iss >> cfg.playerInicialRow;
+		else if (section == "columnInicialPosition")
+			iss >> cfg.playerInicialCol;
+		else if (section == "matrix")
+		{
+			int v;
+			while (iss >> v)
+				matrixVals.push_back(v);
+		}
+		else
+		{
+			err = "Seção [" + section + "] desconhecida";
+			return false;
+		}
+	}
+
+	if (!need("file") || !need("nTiles") || !need("width") || !need("height") ||
+		!need("rows") || !need("columns") || !need("matrix") ||
+		!need("rowInicialPosition") || !need("columnInicialPosition"))
+		return false;
+
+	if (cfg.rows <= 0 || cfg.cols <= 0)
+	{
+		err = "Rows/Columns inválidos";
+		return false;
+	}
+
+	if ((int)matrixVals.size() != cfg.rows * cfg.cols)
+	{
+		err = "Tamanho da matriz (" + to_string(matrixVals.size()) +
+			  ") difere de rows*columns (" +
+			  to_string(cfg.rows * cfg.cols) + ")";
+		return false;
+	}
+
+	cfg.matrix.swap(matrixVals);
+
+	if (cfg.playerInicialRow < 0 || cfg.playerInicialRow >= cfg.rows ||
+		cfg.playerInicialCol < 0 || cfg.playerInicialCol >= cfg.cols)
+	{
+		err = "Posição inicial fora da matriz";
+		return false;
+	}
+
+	return true;
+}
+
+bool loadTileProps(const string &filename, vector<TileType> &tileTypes)
+{
+	ifstream file(filename);
+	if (!file.is_open())
+	{
+		cerr << "Erro ao abrir o arquivo de propriedades dos tiles: " << filename << endl;
+		return false;
+	}
+	string line, currentSection;
+	unordered_map<std::string, TileType> sectionMap = {
+		{"walkable", TileType::Walkable},
+		{"deadly", TileType::Deadly},
+		{"blocked", TileType::Blocked}};
+
+	while (getline(file, line))
+	{
+		line.erase(0, line.find_first_not_of(" \t\r\n"));
+		line.erase(line.find_last_not_of(" \t\r\n") + 1);
+
+		if (line.empty() || line[0] == '#')
+			continue;
+		if (line.front() == '[' && line.back() == ']')
+		{
+			currentSection = line.substr(1, line.size() - 2);
+			for (auto &c : currentSection)
+				c = tolower(c);
+			continue;
+		}
+		if (sectionMap.count(currentSection))
+		{
+			TileType tipo = sectionMap[currentSection];
+			istringstream iss(line);
+			int tileID;
+			while (iss >> tileID)
+			{
+				if (tileID >= 0 && tileID < (int)tileTypes.size())
+					tileTypes[tileID] = tipo;
+				else
+					cerr << "ID de tile inválido no arquivo tileProps.txt: " << tileID << endl;
+			}
+		}
+	}
+
+	return true;
 }
