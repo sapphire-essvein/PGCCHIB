@@ -23,7 +23,8 @@ enum class TileType
 	Walkable,
 	Deadly,
 	Blocked,
-	Unknown
+	Unknown,
+	Coin,
 };
 
 struct Sprite
@@ -58,6 +59,13 @@ struct MapConfig
 	int playerInicialRow, playerInicialCol;
 };
 
+struct Coin
+{
+	int i, j;		// Posição no tile
+	bool collected; // Verifica se foi coletada ou não
+	GLuint texID;
+};
+
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode);
 
 bool loadMapConfig(const string &path, MapConfig &cfg, string &err);
@@ -67,11 +75,18 @@ int setupSprite(int nAnimations, int nFrames, float &ds, float &dt);
 int setupTile(int nTiles, float &ds, float &dt);
 int loadTexture(string filePath, int &width, int &height);
 void desenharMapa(GLuint shaderID, float x0, float y0);
+void inicializarMoedas(GLuint texCoin);
+void desenharMoedas(GLuint shaderID, float x0, float y0, const vector<Coin> &moedas);
 
 MapConfig cfg;
 vector<Tile> tileset;
 int player_i = 0, player_j = 0;
 GLuint WIDTH = 800, HEIGHT = 600;
+
+vector<Coin> moedas;
+int pontuacao = 0;
+int totalMoedas = 0;
+int vida = 3;
 
 const GLchar *vertexShaderSource = R"(
  #version 400
@@ -102,6 +117,8 @@ const GLchar *fragmentShaderSource = R"(
 
 int main()
 {
+	srand(glfwGetTime());
+
 	string err;
 	if (!loadMapConfig("../src/Modulo6/config/tileMap.txt", cfg, err))
 	{
@@ -129,6 +146,7 @@ int main()
 	glfwWindowHint(GLFW_SAMPLES, 8);
 
 	GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Vivencial 3", nullptr, nullptr);
+
 	if (!window)
 	{
 		std::cerr << "Falha ao criar a janela GLFW" << std::endl;
@@ -159,6 +177,7 @@ int main()
 	int imgWidth, imgHeight;
 
 	GLuint texID = loadTexture("../assets/tilesets/tilesetIso.png", imgWidth, imgHeight);
+	GLuint texCoin = loadTexture("../assets/sprites/coin.png", imgWidth, imgHeight);
 
 	for (int i = 0; i < cfg.nTiles; ++i)
 	{
@@ -205,6 +224,7 @@ int main()
 
 	double lastTime = glfwGetTime();
 	double deltaT = 0.0;
+	inicializarMoedas(texCoin);
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -219,9 +239,9 @@ int main()
 				double fps = 1.0 / elapsed_s;
 
 				char tmp[256];
-				sprintf(tmp, "Vivencial 3\tFPS %.2lf", fps);
+				// Adicione a pontuação ao formato da string
+				sprintf(tmp, "PG - Grau B - Amanda Vidal, Lucas Essvein e Marcos Krol\tVida: %d\tScore: %d\t", vida, pontuacao);
 				glfwSetWindowTitle(window, tmp);
-
 				title_countdown_s = 0.1;
 			}
 		}
@@ -249,6 +269,7 @@ int main()
 		}
 
 		desenharMapa(shaderID, x0, y0);
+		desenharMoedas(shaderID, x0, y0, moedas);
 
 		Tile curr_tile = tileset[cfg.matrix[player_i * cfg.cols + player_j]];
 
@@ -269,6 +290,27 @@ int main()
 		glBindVertexArray(jogador.VAO);
 		glBindTexture(GL_TEXTURE_2D, jogador.texID);
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+		// Verifica se a moeda foi coletada e adiciona pontuação
+		for (auto &moeda : moedas)
+		{
+			if (!moeda.collected && moeda.i == player_i && moeda.j == player_j)
+			{
+				moeda.collected = true;
+				pontuacao++;
+				std::cout << "Moeda coletada! Pontuação: " << pontuacao << std::endl;
+			}
+		}
+
+		// Verifica a pontuação com o total de moedas coledas e emite mensagem de ganhador
+		if (pontuacao == totalMoedas && totalMoedas > 0)
+		{
+			std::cout << "Parabéns! Você conseguiu coletar todas as moedas e ganhou o jogo." << std::endl;
+			std::cout << "Moedas coletadas: " << totalMoedas << std::endl;
+			glfwSetWindowShouldClose(window, GL_TRUE);
+		}
+
+		
 
 		glfwSwapBuffers(window);
 	}
@@ -339,8 +381,10 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 				player_j = new_j;
 				break;
 			case TileType::Deadly:
-				cout << "Você morreu ao pisar em tile perigoso!" << endl;
-				glfwSetWindowShouldClose(window, GL_TRUE);
+				// Como visitou um tile perigoso, ele perde uma vida.
+				cout << "Você pisou em um tile perigoso! Perdeu 1 vida." << endl;
+				vida--;
+				cout << "Vidas: " << vida << endl;
 				break;
 			case TileType::Blocked:
 				cout << "Tile bloqueado! Não é possível se mover para cá." << endl;
@@ -350,6 +394,13 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 				cout << "Tile desconhecido! Não é possível se mover para cá." << endl;
 				break;
 			}
+		}
+
+		// Se a vida for menor ou igual a 0, o jogo encerra.
+		if (vida <= 0)
+		{
+			cout << "Game over! Sua vida chegou a zero." << endl;
+			glfwSetWindowShouldClose(window, GL_TRUE);
 		}
 	}
 }
@@ -539,6 +590,86 @@ void desenharMapa(GLuint shaderID, float x0, float y0)
 	}
 }
 
+// Função para inicializar as moedas no jogo
+void inicializarMoedas(GLuint texCoin)
+{
+	moedas.clear();
+
+	const int MAX_MOEDAS = 15;
+	int moedasCriadas = 0;
+
+	float chanceMoedaPorTile = 0.1f;
+
+	for (int i = 0; i < cfg.rows; ++i)
+	{
+		for (int j = 0; j < cfg.cols; ++j)
+		{
+
+			if (moedasCriadas >= MAX_MOEDAS)
+			{
+				break;
+			}
+
+			int tileID = tileAt(i, j);
+
+			if (tileset[tileID].type == TileType::Walkable &&
+				!(i == cfg.playerInicialRow && j == cfg.playerInicialCol))
+			{
+				float randomValue = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+
+				if (randomValue < chanceMoedaPorTile)
+				{
+					moedas.push_back({i, j, false, texCoin});
+					moedasCriadas++;
+				}
+			}
+		}
+		if (moedasCriadas >= MAX_MOEDAS)
+		{
+			break;
+		}
+	}
+	totalMoedas = moedas.size();
+}
+
+void desenharMoedas(GLuint shaderID, float x0, float y0, const vector<Coin> &moedas)
+{
+	// Define tamanho e outras propriedades da moeda
+	vec3 dimensoesMoeda = vec3(cfg.tileW * 0.4f, cfg.tileH * 0.9f, 1.0f);
+	float ds = 1.0;
+	float dt = 1.0;
+
+	static GLuint coinVAO = setupSprite(1, 1, ds, dt); // Uma sprite estática (1x1)
+
+	glBindVertexArray(coinVAO);
+
+	for (const auto &moeda : moedas)
+	{
+		if (moeda.collected)
+			continue;
+
+		Tile curr_tile = tileset[tileAt(moeda.i, moeda.j)];
+
+		float x = x0 + (moeda.j - moeda.i) * curr_tile.dimensions.x / 2.0f;
+		float y = y0 + (moeda.j + moeda.i) * curr_tile.dimensions.y / 2.0f;
+
+		mat4 model = mat4(1.0);
+		model = translate(model, vec3(x + curr_tile.dimensions.x / 2.0f, y + curr_tile.dimensions.y / 2.0f - dimensoesMoeda.y / 2.0f, 0.1f));
+		model = scale(model, dimensoesMoeda);
+
+		glUniformMatrix4fv(glGetUniformLocation(shaderID, "model"), 1, GL_FALSE, value_ptr(model));
+
+		// Usando o canto superior esquerdo da textura da moeda
+		glUniform2f(glGetUniformLocation(shaderID, "offsetTex"), 0.0f, 1.0f - dt);
+
+		// IMPORTANTE: Vincula a textura da moeda!
+		glBindTexture(GL_TEXTURE_2D, moeda.texID);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	}
+
+	glBindVertexArray(0);
+}
+
 bool loadMapConfig(const string &path, MapConfig &cfg, string &err)
 {
 	ifstream in(path);
@@ -650,7 +781,8 @@ bool loadTileProps(const string &filename, vector<TileType> &tileTypes)
 	unordered_map<std::string, TileType> sectionMap = {
 		{"walkable", TileType::Walkable},
 		{"deadly", TileType::Deadly},
-		{"blocked", TileType::Blocked}};
+		{"blocked", TileType::Blocked},
+		{"coin", TileType::Coin}};
 
 	while (getline(file, line))
 	{
