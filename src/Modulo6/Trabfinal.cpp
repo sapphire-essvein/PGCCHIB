@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <string>
+#include <windows.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -310,8 +311,6 @@ int main()
 			glfwSetWindowShouldClose(window, GL_TRUE);
 		}
 
-		
-
 		glfwSwapBuffers(window);
 	}
 
@@ -382,6 +381,8 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 				break;
 			case TileType::Deadly:
 				// Como visitou um tile perigoso, ele perde uma vida.
+				player_i = cfg.playerInicialCol;
+				player_j = cfg.playerInicialRow;
 				cout << "Você pisou em um tile perigoso! Perdeu 1 vida." << endl;
 				vida--;
 				cout << "Vidas: " << vida << endl;
@@ -615,7 +616,7 @@ void inicializarMoedas(GLuint texCoin)
 			if (tileset[tileID].type == TileType::Walkable &&
 				!(i == cfg.playerInicialRow && j == cfg.playerInicialCol))
 			{
-				float randomValue = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+				float randomValue = (float)(rand()) / (float)(RAND_MAX);
 
 				if (randomValue < chanceMoedaPorTile)
 				{
